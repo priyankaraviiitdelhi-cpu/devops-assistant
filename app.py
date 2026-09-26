@@ -6,6 +6,7 @@ import streamlit as st
 from llm import chat, PROVIDER, MODEL
 from rag import search
 import ui_provision
+import ui_cost
 
 st.set_page_config(page_title="AI DevOps Assistant")
 st.title("AI DevOps Assistant")
@@ -13,10 +14,13 @@ st.caption(f"Powered by {PROVIDER} / {MODEL}")
 
 # ---- Sidebar: choose a mode ----
 st.sidebar.header("Mode")
-mode = st.sidebar.radio("What do you want to do?", ["Chat", "Provision infrastructure"])
+mode = st.sidebar.radio("What do you want to do?", ["Chat", "Provision infrastructure", "Cost optimization"])
 
 if mode == "Provision infrastructure":
     ui_provision.render()
+    st.stop()
+if mode == "Cost optimization":
+    ui_cost.render()
     st.stop()
 
 # ---- Chat mode ----
