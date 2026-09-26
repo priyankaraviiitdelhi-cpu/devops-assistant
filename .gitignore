@@ -1,0 +1,6 @@
+venv/
+.env
+*.tfstate*
+.terraform/
+__pycache__/
+chroma_db/
