@@ -27,13 +27,13 @@ KNOWLEDGE BASE EXCERPTS:
 """
 
 
-def chat(messages, context=None):
+def chat(messages, context=None, system=None):
     """
     Send the conversation to the LLM and return its reply as text.
     messages = [{"role": "user" or "assistant", "content": "..."}]
     context  = text retrieved from the knowledge base (optional)
     """
-    system = SYSTEM_PROMPT
+    system = system or SYSTEM_PROMPT
     if context:
         system += RAG_INSTRUCTIONS + context
 
@@ -57,9 +57,18 @@ def _chat_gemini(messages, system):
         for m in messages
     ]
 
-    response = client.models.generate_content(
-        model=MODEL,
-        contents=contents,
-        config=types.GenerateContentConfig(system_instruction=system),
-    )
-    return response.text
+    # Retry a few times if Google's servers are busy (503) or rate-limited (429)
+    import time
+    for attempt in range(4):
+        try:
+            response = client.models.generate_content(
+                model=MODEL,
+                contents=contents,
+                config=types.GenerateContentConfig(system_instruction=system),
+            )
+            return response.text
+        except Exception as e:
+            busy = "503" in str(e) or "429" in str(e)
+            if not busy or attempt == 3:
+                raise
+            time.sleep(2 ** attempt * 3)  # wait 3s, 6s, 12s

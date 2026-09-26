@@ -4,3 +4,5 @@ venv/
 .terraform/
 __pycache__/
 chroma_db/
+
+terraform_workspace/

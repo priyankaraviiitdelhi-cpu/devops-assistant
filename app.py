@@ -1,21 +1,29 @@
 """
-app.py - the chat web page (built with Streamlit).
+app.py - the main web page (built with Streamlit).
 Run it with:  streamlit run app.py
 """
 import streamlit as st
 from llm import chat, PROVIDER, MODEL
 from rag import search
+import ui_provision
 
 st.set_page_config(page_title="AI DevOps Assistant")
 st.title("AI DevOps Assistant")
 st.caption(f"Powered by {PROVIDER} / {MODEL}")
 
-# Remember the conversation while the page is open
+# ---- Sidebar: choose a mode ----
+st.sidebar.header("Mode")
+mode = st.sidebar.radio("What do you want to do?", ["Chat", "Provision infrastructure"])
+
+if mode == "Provision infrastructure":
+    ui_provision.render()
+    st.stop()
+
+# ---- Chat mode ----
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Sidebar controls
-st.sidebar.header("Settings")
+st.sidebar.header("Chat settings")
 use_kb = st.sidebar.toggle("Use knowledge base (RAG)", value=True)
 if st.sidebar.button("Clear chat"):
     st.session_state.messages = []
@@ -30,13 +38,11 @@ def show_sources(sources):
                 st.caption(s["text"][:300] + " ...")
 
 
-# Show the previous messages
 for m in st.session_state.messages:
     with st.chat_message(m["role"]):
         st.markdown(m["content"])
         show_sources(m.get("sources"))
 
-# Chat input box at the bottom
 if prompt := st.chat_input("Ask a DevOps or AWS question..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
@@ -54,5 +60,5 @@ if prompt := st.chat_input("Ask a DevOps or AWS question..."):
                     {"role": "assistant", "content": reply, "sources": sources}
                 )
             except Exception as e:
-                st.session_state.messages.pop()  # remove the failed question
+                st.session_state.messages.pop()
                 st.error(f"Something went wrong: {e}")
