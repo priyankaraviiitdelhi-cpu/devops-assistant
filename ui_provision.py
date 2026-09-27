@@ -13,6 +13,10 @@ def render():
         "Describe what you want. The assistant writes Terraform, checks it against "
         "team policies and shows the plan. **Nothing is created until you click Approve.**"
     )
+    expert = st.toggle("Expert mode", value=False,
+                       help="Allows NAT gateways, EKS, custom VPCs and larger sizes. These can cost a lot. Use with care.")
+    if expert:
+        st.warning("Expert mode is ON: expensive resources are allowed. Always read the plan before approving.")
 
     request = st.text_area(
         "What should I create?",
@@ -24,7 +28,7 @@ def render():
         else:
             with st.spinner("Writing Terraform and running plan (the first run downloads the AWS provider, about 1 minute)..."):
                 try:
-                    st.session_state.infra = agent.prepare(request)
+                    st.session_state.infra = agent.prepare(request, expert=expert)
                 except Exception as e:
                     st.error(f"Something went wrong: {e}")
 
@@ -43,6 +47,8 @@ def _show_proposal(infra):
     if infra["issues"]:
         st.error("Blocked by guardrails:\n\n" + "\n".join(f"- {i}" for i in infra["issues"]))
 
+    for warning in infra.get("warnings", []):
+        st.warning(f"Cost warning: {warning}")
     st.markdown(f"#### Plan: {infra['summary']}")
     if infra["plan"]:
         with st.expander("Full terraform output"):

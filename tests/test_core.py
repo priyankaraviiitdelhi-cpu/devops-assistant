@@ -3,7 +3,7 @@ Unit tests - no Gemini or AWS calls, so they are free and run in CI.
 Run locally with:  pytest -v
 """
 from cost_agent import demo_scan
-from infra_agent import _extract_hcl, check_guardrails
+from infra_agent import _extract_hcl, check_guardrails, get_cost_warnings
 from rag import chunk_text
 
 GOOD = '''
@@ -12,16 +12,25 @@ resource "aws_s3_bucket" "logs" { bucket = "devops-assistant-dev-logs" }
 resource "aws_instance" "web" { instance_type = "t3.micro" }
 '''
 
+RDS_OK = '''
+resource "aws_db_instance" "db" {
+  instance_class      = "db.t3.micro"
+  allocated_storage   = 20
+  multi_az            = false
+  publicly_accessible = false
+}
+'''
 
-# ---- Guardrails ----
+
+# ---- Basic guardrails ----
 
 def test_allowed_config_passes():
     assert check_guardrails(GOOD) == []
 
 
 def test_blocks_disallowed_resource():
-    issues = check_guardrails(GOOD + 'resource "aws_db_instance" "db" {}')
-    assert any("aws_db_instance" in i for i in issues)
+    issues = check_guardrails(GOOD + 'resource "aws_iam_user" "u" {}')
+    assert any("aws_iam_user" in i for i in issues)
 
 
 def test_blocks_large_instance_type():
@@ -54,6 +63,50 @@ def test_blocks_ssh_open_to_world():
     assert any("SSH" in i for i in check_guardrails(GOOD + rule))
 
 
+# ---- New service limits ----
+
+def test_small_rds_is_allowed():
+    assert check_guardrails(GOOD + RDS_OK) == []
+
+
+def test_blocks_big_or_public_rds():
+    bad = RDS_OK.replace("db.t3.micro", "db.m5.large").replace("= 20", "= 100") \
+                .replace("publicly_accessible = false", "publicly_accessible = true")
+    issues = check_guardrails(GOOD + bad)
+    assert any("instance_class" in i for i in issues)
+    assert any("allocated_storage" in i for i in issues)
+    assert any("publicly accessible" in i for i in issues)
+
+
+def test_dynamodb_must_be_on_demand():
+    table = 'resource "aws_dynamodb_table" "t" {\n  billing_mode = "PROVISIONED"\n}'
+    assert any("PAY_PER_REQUEST" in i for i in check_guardrails(GOOD + table))
+
+
+def test_iam_role_name_and_policy_limits():
+    role = 'resource "aws_iam_role" "r" {\n  name = "admin-role"\n}'
+    attach = 'resource "aws_iam_role_policy_attachment" "a" {\n  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"\n}'
+    issues = check_guardrails(GOOD + role + attach)
+    assert any("must start with" in i for i in issues)
+    assert any("AWSLambdaBasicExecutionRole" in i for i in issues)
+
+
+def test_inline_role_policy_is_blocked():
+    issues = check_guardrails(GOOD + 'resource "aws_iam_role_policy" "p" {}')
+    assert any("aws_iam_role_policy" in i for i in issues)
+
+
+def test_nat_gateway_needs_expert_mode():
+    code = GOOD + 'resource "aws_nat_gateway" "nat" {}'
+    assert any("Expert mode" in i for i in check_guardrails(code))
+    assert check_guardrails(code, expert=True) == []
+
+
+def test_cost_warnings_for_idle_cost_resources():
+    warnings = get_cost_warnings(GOOD + RDS_OK + 'resource "aws_lb" "alb" {}')
+    assert len(warnings) == 2
+
+
 # ---- Helpers ----
 
 def test_extract_hcl_from_llm_reply():
@@ -62,7 +115,7 @@ def test_extract_hcl_from_llm_reply():
 
 
 def test_chunk_text_splits_long_documents():
-    text = "\n\n".join(["word " * 50] * 10)  # 10 paragraphs of ~250 characters
+    text = "\n\n".join(["word " * 50] * 10)
     chunks = chunk_text(text, max_chars=600)
     assert len(chunks) > 1
     assert all(len(c) <= 700 for c in chunks)

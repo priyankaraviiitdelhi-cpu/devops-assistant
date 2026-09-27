@@ -40,3 +40,12 @@ Use the pattern <project>-<environment>-<resource>, for example devops-assistant
 - Never commit access keys, API keys or .env files to Git.
 - Give IAM users and roles only the permissions they need.
 - Turn on MFA for the root account and never use root for daily work.
+
+
+## Allowed services and limits
+- RDS: only db.t3.micro or db.t4g.micro, at most 20 GB storage, no Multi-AZ, never publicly accessible.
+- Lambda: memory at most 512 MB. API Gateway HTTP APIs are allowed.
+- DynamoDB: on-demand billing (PAY_PER_REQUEST) only.
+- CloudFront and Application Load Balancers are allowed but cost money even when idle.
+- IAM: only roles named devops-assistant-*, and only the AWSLambdaBasicExecutionRole policy may be attached.
+- NAT Gateways, EKS, Elastic IPs, custom VPCs and larger instance sizes need Expert mode.
