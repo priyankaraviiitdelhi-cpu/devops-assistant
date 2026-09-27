@@ -9,6 +9,7 @@ rag.py - the knowledge base (RAG = Retrieval-Augmented Generation).
 Build or rebuild the knowledge base with:  python rag.py
 """
 from pathlib import Path
+
 import chromadb
 
 DOCS_DIR = Path("data/docs")

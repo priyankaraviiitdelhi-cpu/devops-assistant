@@ -1,10 +1,9 @@
 venv/
 .env
-*.tfstate*
-.terraform/
-__pycache__/
+.git/
 chroma_db/
-
 terraform_workspace/
+__pycache__/
+*.pyc
 .pytest_cache/
 .ruff_cache/

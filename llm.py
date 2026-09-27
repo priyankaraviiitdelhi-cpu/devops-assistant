@@ -4,6 +4,7 @@ All LLM calls go through here, so switching providers later
 (Gemini -> Claude -> OpenAI) only means editing this one file and .env.
 """
 import os
+
 from dotenv import load_dotenv
 
 load_dotenv()  # reads the values from .env

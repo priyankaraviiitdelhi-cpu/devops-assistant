@@ -1,0 +1,15 @@
+services:
+  devops-assistant:
+    build: .
+    ports:
+      - "8501:8501"
+    env_file: .env                          # API key is passed in at runtime, never baked into the image
+    volumes:
+      - ~/.aws:/root/.aws:ro                # AWS credentials from your Mac (read-only)
+      - ./terraform_workspace:/app/terraform_workspace   # keep Terraform state on your Mac
+      - chroma-cache:/root/.cache/chroma    # cache the embedding model
+      - tf-plugins:/root/.terraform.d       # cache the Terraform AWS provider
+
+volumes:
+  chroma-cache:
+  tf-plugins:

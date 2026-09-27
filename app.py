@@ -3,11 +3,12 @@ app.py - the main web page (built with Streamlit).
 Run it with:  streamlit run app.py
 """
 import streamlit as st
-from llm import chat, PROVIDER, MODEL
-from rag import search
+
 import tools_agent
-import ui_provision
 import ui_cost
+import ui_provision
+from llm import MODEL, PROVIDER, chat
+from rag import search
 
 st.set_page_config(page_title="AI DevOps Assistant")
 st.title("AI DevOps Assistant")

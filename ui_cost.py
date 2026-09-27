@@ -3,6 +3,7 @@ ui_cost.py - the "Cost optimization" page. Read-only: nothing in AWS is changed.
 """
 import pandas as pd
 import streamlit as st
+
 import cost_agent
 
 
