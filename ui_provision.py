@@ -2,6 +2,8 @@
 ui_provision.py - the "Provision infrastructure" page.
 Nothing is created in AWS until the user clicks "Approve and apply".
 """
+from datetime import datetime
+
 import streamlit as st
 
 import infra_agent as agent
@@ -86,6 +88,11 @@ def _show_stacks():
         with st.container(border=True):
             st.markdown(f"**{s['name']}** - {s['request']}")
             st.caption("Resources: " + ", ".join(s["resources"]))
+            if s.get("expires"):
+                if s["expires"] < datetime.now().strftime("%Y-%m-%d %H:%M"):
+                    st.error(f"Expired on {s['expires']} - destroy it to stop paying.")
+                else:
+                    st.caption(f"Planned until {s['expires']}")
             if st.button("Destroy", key=f"destroy-{s['name']}"):
                 with st.spinner("Running terraform destroy..."):
                     ok, output = agent.destroy(s["workdir"])

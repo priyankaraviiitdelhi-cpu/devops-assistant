@@ -1,3 +1,4 @@
+
 """
 infra_agent.py - turns a plain-English request into Terraform, checks it, and runs it.
 
@@ -14,7 +15,7 @@ import re
 import secrets
 import shutil
 import subprocess
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from llm import chat
@@ -215,14 +216,16 @@ def get_cost_warnings(code):
 
 # ---------------- Main flow ----------------
 
-def prepare(request, expert=False, max_attempts=2):
+def prepare(request, expert=False, duration_days=None, max_attempts=2):
     """Write Terraform for the request, validate it, check guardrails and run plan."""
     PLUGIN_CACHE.mkdir(parents=True, exist_ok=True)
     name = f"stack-{datetime.now():%Y%m%d-%H%M%S}"
     workdir = WORKSPACE_DIR / name
     workdir.mkdir(parents=True, exist_ok=True)
     (workdir / "request.txt").write_text(request, encoding="utf-8")
-
+    if duration_days:
+        expires = datetime.now() + timedelta(days=float(duration_days))
+        (workdir / "expires.txt").write_text(expires.strftime("%Y-%m-%d %H:%M"), encoding="utf-8")
     docs = search(request + " tags naming region policy limits", k=4)
     context = "\n\n".join(f"[{d['source']}]\n{d['text']}" for d in docs)
     system = (TERRAFORM_PROMPT
@@ -306,6 +309,7 @@ def list_stacks():
                 "name": d.name,
                 "workdir": str(d),
                 "request": request_file.read_text() if request_file.exists() else "",
+                "expires": (d / "expires.txt").read_text() if (d / "expires.txt").exists() else None,
                 "resources": [f"{r['type']}.{r['name']}" for r in managed],
             })
     return stacks

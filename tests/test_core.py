@@ -126,3 +126,20 @@ def test_chunk_text_splits_long_documents():
 def test_demo_scan_total_savings():
     total = sum(f["monthly_savings"] for f in demo_scan()["findings"])
     assert round(total, 2) == 162.49
+
+
+
+
+# ---- Pricing ----
+
+def test_ec2_estimate_for_30_days():
+    from pricing import estimate
+    result = estimate([{"service": "ec2", "size": "t3.micro"}], 30)
+    assert 11 < result["total_usd"] < 14
+
+
+def test_free_and_unknown_services():
+    from pricing import estimate
+    result = estimate([{"service": "security_group"}, {"service": "quantum_computer"}], 7)
+    assert result["total_usd"] == 0
+    assert "No price data" in result["items"][1]["assumption"]
