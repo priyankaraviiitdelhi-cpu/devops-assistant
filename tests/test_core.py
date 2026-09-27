@@ -91,9 +91,29 @@ def test_iam_role_name_and_policy_limits():
     assert any("AWSLambdaBasicExecutionRole" in i for i in issues)
 
 
-def test_inline_role_policy_is_blocked():
-    issues = check_guardrails(GOOD + 'resource "aws_iam_role_policy" "p" {}')
-    assert any("aws_iam_role_policy" in i for i in issues)
+ROLE_OK = '''
+resource "aws_iam_role" "r" {
+  name                 = "devops-assistant-dev-lambda"
+  permissions_boundary = "arn:aws:iam::123:policy/devops-assistant-boundary"
+}
+'''
+
+
+def test_role_needs_permissions_boundary():
+    role = 'resource "aws_iam_role" "r" {\n  name = "devops-assistant-x"\n}'
+    assert any("permissions boundary" in i for i in check_guardrails(GOOD + role))
+
+
+def test_scoped_inline_policy_is_allowed():
+    policy = ('resource "aws_iam_role_policy" "p" {\n'
+              '  policy = jsonencode({ Statement = [{ Action = ["dynamodb:PutItem", "s3:PutObject"] }] })\n}')
+    assert check_guardrails(GOOD + ROLE_OK + policy) == []
+
+
+def test_dangerous_inline_policy_is_blocked():
+    policy = ('resource "aws_iam_role_policy" "p" {\n'
+              '  policy = jsonencode({ Statement = [{ Action = ["iam:*"] }] })\n}')
+    assert any("iam:*" in i for i in check_guardrails(GOOD + ROLE_OK + policy))
 
 
 def test_nat_gateway_needs_expert_mode():

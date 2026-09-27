@@ -47,5 +47,5 @@ Use the pattern <project>-<environment>-<resource>, for example devops-assistant
 - Lambda: memory at most 512 MB. API Gateway HTTP APIs are allowed.
 - DynamoDB: on-demand billing (PAY_PER_REQUEST) only.
 - CloudFront and Application Load Balancers are allowed but cost money even when idle.
-- IAM: only roles named devops-assistant-*, and only the AWSLambdaBasicExecutionRole policy may be attached.
+- IAM: only roles named devops-assistant-*, always with the devops-assistant-boundary permissions boundary. Only AWSLambdaBasicExecutionRole may be attached. Inline role policies may only use logs:, dynamodb: and s3: actions on devops-assistant-* resources.
 - NAT Gateways, EKS, Elastic IPs, custom VPCs and larger instance sizes need Expert mode.

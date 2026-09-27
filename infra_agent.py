@@ -32,6 +32,9 @@ MAX_DB_STORAGE_GB = 20
 MAX_LAMBDA_MEMORY_MB = 512
 ROLE_PREFIX = "devops-assistant-"
 ALLOWED_ROLE_POLICIES = {"arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"}
+BOUNDARY_POLICY_NAME = "devops-assistant-boundary"
+ALLOWED_ROLE_ACTION_PREFIXES = ("logs:", "dynamodb:", "s3:")
+
 
 # Resource types allowed in normal mode (exact names)
 ALLOWED_RESOURCE_TYPES = {
@@ -42,7 +45,7 @@ ALLOWED_RESOURCE_TYPES = {
     "aws_dynamodb_table",
     "aws_cloudfront_distribution", "aws_cloudfront_origin_access_control",
     "aws_lb", "aws_lb_listener", "aws_lb_target_group", "aws_lb_target_group_attachment",
-    "aws_iam_role", "aws_iam_role_policy_attachment",
+    "aws_iam_role", "aws_iam_role_policy", "aws_iam_role_policy_attachment",
 }
 # Families allowed by prefix (the resource and all its settings resources)
 ALLOWED_RESOURCE_PREFIXES = ("aws_s3_bucket", "aws_apigatewayv2_")
@@ -74,15 +77,20 @@ Rules:
   aws_cloudwatch_log_group), API Gateway HTTP APIs (aws_apigatewayv2_*), DynamoDB (aws_dynamodb_table),
   CloudFront (aws_cloudfront_distribution, aws_cloudfront_origin_access_control),
   load balancers (aws_lb, aws_lb_listener, aws_lb_target_group, aws_lb_target_group_attachment),
-  IAM (only aws_iam_role and aws_iam_role_policy_attachment). Data sources are allowed.
+    IAM (only aws_iam_role, aws_iam_role_policy and aws_iam_role_policy_attachment). Data sources are allowed.
 - Limits:
   * EC2 instance_type: t3.micro, t3.small, t4g.micro or t4g.small.
   * RDS: instance_class db.t3.micro or db.t4g.micro, allocated_storage <= 20, multi_az = false,
     publicly_accessible = false, skip_final_snapshot = true. Use manage_master_user_password = true.
   * Lambda: memory_size <= 512. For code, zip a small inline handler with data "archive_file".
   * DynamoDB: billing_mode = "PAY_PER_REQUEST".
-  * IAM role names must start with "devops-assistant-". The only policy you may attach is
-    arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole. No inline role policies.
+    * IAM role names must start with "devops-assistant-" and every role MUST set
+    permissions_boundary = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/devops-assistant-boundary"
+    (add data "aws_caller_identity" "current" {}).
+  * The only managed policy you may attach is arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole.
+  * To let Lambda use DynamoDB or S3, add ONE aws_iam_role_policy written with jsonencode, using only
+    logs:, dynamodb: and s3: actions (never "*" or iam:), scoped to this project's table and bucket ARNs.
+  * Name DynamoDB tables and S3 buckets starting with "devops-assistant-".
   * Never open SSH (port 22) to 0.0.0.0/0. Never put credentials in the code.
 - S3 bucket names must be globally unique: end every bucket name with -{suffix}
 - Use the default VPC (data "aws_vpc" with default = true) unless expert mode allows otherwise.
@@ -182,12 +190,23 @@ def check_guardrails(code, expert=False):
             role_name = _attr(body, "name")
             if not role_name or not role_name.startswith(ROLE_PREFIX):
                 issues.append(f"{label}: IAM role names must start with '{ROLE_PREFIX}'.")
-
+            boundary = _attr(body, "permissions_boundary")
+            if not boundary or BOUNDARY_POLICY_NAME not in boundary:
+                issues.append(f"{label}: IAM roles must have the {BOUNDARY_POLICY_NAME} permissions boundary.")
         if rtype == "aws_iam_role_policy_attachment":
             policy_arn = _attr(body, "policy_arn")
             if policy_arn not in ALLOWED_ROLE_POLICIES:
                 issues.append(f"{label}: only AWSLambdaBasicExecutionRole may be attached to roles.")
 
+    if any(rtype == "aws_iam_role_policy" for rtype, _, _ in _resource_blocks(code)):
+        actions = []
+        for group in re.findall(r'[Aa]ctions?"?\s*[=:]\s*(\[[^\]]*\]|"[^"]*")', code):
+            actions += re.findall(r'"([^"]+)"', group)
+        if not actions:
+            issues.append("Could not read the actions in the inline role policy.")
+        for action in actions:
+            if action == "*" or not action.startswith(ALLOWED_ROLE_ACTION_PREFIXES):
+                issues.append(f"Role policy action '{action}' is not allowed. Only logs:, dynamodb: and s3: actions.")
     if not expert:
         for itype in re.findall(r'instance_type\s*=\s*"([^"]+)"', code):
             if itype not in ALLOWED_INSTANCE_TYPES:
